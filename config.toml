@@ -1,0 +1,15 @@
+# 라이트 테마 고정 — 다크 모드에서 버튼이 검게 보이는 현상 완화
+[theme]
+base = "light"
+primaryColor = "#2dd4bf"
+backgroundColor = "#f0fdfa"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#134e4a"
+
+# 배포·로컬 공통: 서버 모드(헤드리스), 대용량 백업 ZIP 업로드 여유
+[server]
+headless = true
+maxUploadSize = 200
+
+[browser]
+gatherUsageStats = false

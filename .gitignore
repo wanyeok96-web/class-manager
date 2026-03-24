@@ -1,0 +1,17 @@
+# 로컬 DB — 절대 저장소에 포함하지 마세요 (개인정보·학급 데이터)
+counseling.db
+*.db-journal
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# 에디터
+.idea/
+.vscode/
+
+# Streamlit 로컬 비밀 (Community Cloud는 대시보드에서 설정)
+.streamlit/secrets.toml
