@@ -543,6 +543,45 @@ def set_feedback_read_by_admin(feedback_id: int, read: bool) -> None:
         conn.commit()
 
 
+def ensure_counseling_topics_column(conn):
+    """개별 상담 주제(체크박스) JSON 배열 컬럼."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(counselings)").fetchall()}
+    if "topics" not in cols:
+        conn.execute("ALTER TABLE counselings ADD COLUMN topics TEXT NOT NULL DEFAULT '[]'")
+
+
+# 개별 상담 주제 옵션 (저장 키 → 표시 라벨)
+COUNSELING_TOPIC_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("career_admission", "진로·진학"),
+    ("academic_exam", "학업·시험"),
+    ("relations", "대인·관계"),
+    ("school_life", "학교생활·적응"),
+    ("emotion_home", "정서·생활·가정"),
+)
+COUNSELING_TOPIC_LABEL_BY_KEY: dict[str, str] = {k: v for k, v in COUNSELING_TOPIC_OPTIONS}
+
+
+def _counseling_topics_encode(keys: list[str]) -> str:
+    order = [k for k, _ in COUNSELING_TOPIC_OPTIONS if k in keys]
+    return json.dumps(order, ensure_ascii=False)
+
+
+def _counseling_topics_decode(raw: str | None) -> list[str]:
+    if not raw or not str(raw).strip():
+        return []
+    try:
+        data = json.loads(raw)
+        if not isinstance(data, list):
+            return []
+        return [x for x in data if isinstance(x, str) and x in COUNSELING_TOPIC_LABEL_BY_KEY]
+    except json.JSONDecodeError:
+        return []
+
+
+def _counseling_topic_labels_display(keys: list[str]) -> str:
+    return ", ".join(COUNSELING_TOPIC_LABEL_BY_KEY[k] for k in keys if k in COUNSELING_TOPIC_LABEL_BY_KEY)
+
+
 def cleanup_demo_students(conn):
     """
     과거 개발 테스트로 들어간 1/a, 2/b 더미 학생은 목록에서 제거합니다.
@@ -596,13 +635,23 @@ def migrate_legacy_if_needed(conn):
                 (nm, num),
             ).fetchone()
         if row:
-            conn.execute(
-                """
-                INSERT INTO counselings (student_id, content, created_at)
-                VALUES (?, ?, ?)
-                """,
-                (row["id"], r["content"].strip(), r["created_at"]),
-            )
+            cols_c = {x[1] for x in conn.execute("PRAGMA table_info(counselings)").fetchall()}
+            if "topics" in cols_c:
+                conn.execute(
+                    """
+                    INSERT INTO counselings (student_id, content, created_at, topics)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (row["id"], r["content"].strip(), r["created_at"], "[]"),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO counselings (student_id, content, created_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (row["id"], r["content"].strip(), r["created_at"]),
+                )
     conn.execute("DROP TABLE counseling_records")
     conn.commit()
 
@@ -631,6 +680,7 @@ def init_db():
             )
             """
         )
+        ensure_counseling_topics_column(conn)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS life_records (
@@ -707,6 +757,31 @@ def get_student(student_id: int, owner_user_id: int | None = None):
         return cur.fetchone()
 
 
+def update_student_career_interest(
+    student_id: int, career_interest: str, owner_user_id: int | None = None
+) -> tuple[bool, str]:
+    """명부의 희망 진로(career_interest)만 수정합니다."""
+    uid = owner_user_id if owner_user_id is not None else _current_app_user_id()
+    if uid is None:
+        return False, "로그인이 필요합니다."
+    ci = str(career_interest or "").strip()
+    try:
+        with get_connection() as conn:
+            cur = conn.execute(
+                """
+                UPDATE students SET career_interest = ?
+                WHERE id = ? AND owner_user_id = ?
+                """,
+                (ci, int(student_id), uid),
+            )
+            conn.commit()
+            if cur.rowcount != 1:
+                return False, "학생을 찾을 수 없거나 저장할 수 없습니다."
+    except Exception:
+        return False, "저장 중 오류가 발생했습니다."
+    return True, ""
+
+
 def add_student(
     name: str, number: str, gender: str | None = None, owner_user_id: int | None = None
 ) -> tuple[bool, str]:
@@ -745,10 +820,7 @@ def add_student_form(
     name: str,
     gender: str | None,
     student_phone: str,
-    primary_guardian: str,
     guardian_phone: str,
-    hobbies_skills: str,
-    career_interest: str,
     owner_user_id: int | None = None,
 ) -> tuple[bool, str]:
     name_v = str(name or "").strip()
@@ -761,9 +833,9 @@ def add_student_form(
     g = normalize_gender(gender) if gender else None
     sp = _normalize_phone(student_phone)
     gp = _normalize_phone(guardian_phone)
-    pg = str(primary_guardian or "").strip()
-    hs = str(hobbies_skills or "").strip()
-    ci = str(career_interest or "").strip()
+    pg = ""
+    hs = ""
+    ci = ""
     try:
         with get_connection() as conn:
             conn.execute(
@@ -814,14 +886,17 @@ def delete_counseling(counseling_id: int) -> bool:
         return cur.rowcount == 1
 
 
-def update_counseling(counseling_id: int, content: str) -> bool:
+def update_counseling(
+    counseling_id: int, content: str, topics: list[str] | None = None
+) -> bool:
     content = content.strip()
     if not content:
         return False
+    tj = _counseling_topics_encode(list(topics) if topics else [])
     with get_connection() as conn:
         conn.execute(
-            "UPDATE counselings SET content = ? WHERE id = ?",
-            (content, counseling_id),
+            "UPDATE counselings SET content = ?, topics = ? WHERE id = ?",
+            (content, tj, counseling_id),
         )
         conn.commit()
     return True
@@ -831,7 +906,7 @@ def update_counseling(counseling_id: int, content: str) -> bool:
 LIFE_RECORD_CATEGORIES: dict[str, str] = {
     "autonomous": "자율활동",
     "career": "진로활동",
-    "behavior": "행동발달 특기사항",
+    "behavior": "행동발달",
 }
 
 
@@ -1229,6 +1304,7 @@ def export_account_backup_zip(user_id: int) -> tuple[bytes | None, str | None]:
                     "backup_student_id": bid,
                     "content": c["content"],
                     "created_at": c["created_at"],
+                    "topics": c["topics"],
                 }
             )
         for cat in LIFE_RECORD_CATEGORIES:
@@ -1336,12 +1412,21 @@ def import_account_backup_zip(
                 oid = int(c["backup_student_id"])
                 if oid not in id_map:
                     continue
+                top_raw = c.get("topics")
+                if top_raw is None or str(top_raw).strip() == "":
+                    tj = "[]"
+                else:
+                    tj = (
+                        top_raw
+                        if isinstance(top_raw, str)
+                        else json.dumps(top_raw, ensure_ascii=False)
+                    )
                 conn.execute(
                     """
-                    INSERT INTO counselings (student_id, content, created_at)
-                    VALUES (?, ?, ?)
+                    INSERT INTO counselings (student_id, content, created_at, topics)
+                    VALUES (?, ?, ?, ?)
                     """,
-                    (id_map[oid], c.get("content") or "", c.get("created_at") or ""),
+                    (id_map[oid], c.get("content") or "", c.get("created_at") or "", tj),
                 )
 
             for lr in life_in:
@@ -1783,6 +1868,16 @@ def gender_emoji(g) -> str:
     return "◦"
 
 
+def dashboard_roster_summary_line(settings: dict, students: list) -> str:
+    """담임 설정·명부 기준 학급 한 줄 요약 (대시보드 학생 개별 관리 상단)."""
+    gr = (settings.get("grade") or "").strip() or "0"
+    cn = (settings.get("class_name") or "").strip() or "0"
+    total = len(students)
+    male = sum(1 for s in students if normalize_gender(s["gender"]) == "남")
+    female = sum(1 for s in students if normalize_gender(s["gender"]) == "여")
+    return f"{gr}학년 {cn}반. 총원 {total}명. 남학생 {male}명, 여학생 {female}명"
+
+
 def import_students_from_excel_bytes(
     data: bytes, acting_user_id: int | None = None
 ) -> tuple[int, int, int, str | None]:
@@ -1871,7 +1966,7 @@ def list_counselings(student_id: int):
     with get_connection() as conn:
         cur = conn.execute(
             """
-            SELECT id, content, created_at
+            SELECT id, content, created_at, topics
             FROM counselings
             WHERE student_id = ?
             ORDER BY datetime(created_at) DESC
@@ -1881,17 +1976,25 @@ def list_counselings(student_id: int):
         return cur.fetchall()
 
 
-def add_counseling(student_id: int, content: str):
+def add_counseling(
+    student_id: int, content: str, topics: list[str] | None = None
+):
     content = content.strip()
     if not content:
         return False
+    tj = _counseling_topics_encode(list(topics) if topics else [])
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO counselings (student_id, content, created_at)
-            VALUES (?, ?, ?)
+            INSERT INTO counselings (student_id, content, created_at, topics)
+            VALUES (?, ?, ?, ?)
             """,
-            (student_id, content, datetime.now().isoformat(timespec="seconds")),
+            (
+                student_id,
+                content,
+                datetime.now().isoformat(timespec="seconds"),
+                tj,
+            ),
         )
         conn.commit()
     return True
@@ -1914,6 +2017,10 @@ def inject_style():
         --geo-warm: #fffbeb;
         --geo-accent: #0d9488;
         --geo-accent2: #0ea5e9;
+    }
+    /* 클라우드·최신 Streamlit: 시스템 다크/브라우저 color-scheme 으로 위젯만 검게 나오는 것 방지 */
+    html {
+        color-scheme: light !important;
     }
     .stApp,
     .stApp button,
@@ -1969,8 +2076,15 @@ def inject_style():
         font-weight: 500 !important;
     }
     .stTextInput input,
-    .stTextArea textarea {
+    .stTextArea textarea,
+    section.main [data-testid="stTextInput"] input,
+    section.main [data-testid="stTextArea"] textarea,
+    section.main [data-testid="stPasswordInput"] input {
+        background-color: #ffffff !important;
+        background: #ffffff !important;
         color: var(--geo-text) !important;
+        -webkit-text-fill-color: var(--geo-text) !important;
+        caret-color: var(--geo-deep) !important;
         font-size: 16px !important;
         border-radius: 14px !important;
         border: 1px solid rgba(19, 78, 74, 0.15) !important;
@@ -2052,7 +2166,7 @@ def inject_style():
     }
     .geo-welcome-line {
         font-family: var(--geo-font) !important;
-        font-size: 0.98rem !important;
+        font-size: 1.15rem !important;
         font-weight: 700 !important;
         color: #0f766e !important;
         margin: 0.35rem 0 0.2rem 0 !important;
@@ -2105,7 +2219,8 @@ def inject_style():
         line-height: 1.45 !important;
         max-width: 42rem;
     }
-    section.main div.stButton > button[kind="primary"] {
+    /* 후손 선택자: .stButton 과 button 사이 래퍼가 있어도 적용 (배포/최신 Streamlit) */
+    section.main div.stButton button[kind="primary"] {
         background: linear-gradient(180deg, #5eead4 0%, #2dd4bf 55%, #14b8a6 100%) !important;
         border: 1px solid rgba(255, 255, 255, 0.35) !important;
         color: #ffffff !important;
@@ -2116,13 +2231,13 @@ def inject_style():
         box-shadow: 0 4px 18px rgba(45, 212, 191, 0.45) !important;
         text-shadow: 0 1px 1px rgba(15, 118, 110, 0.2) !important;
     }
-    section.main div.stButton > button[kind="primary"]:hover {
+    section.main div.stButton button[kind="primary"]:hover {
         background: linear-gradient(180deg, #2dd4bf 0%, #14b8a6 100%) !important;
         color: #ffffff !important;
         border-color: rgba(255, 255, 255, 0.45) !important;
     }
     /* 상세·보조 버튼: 연한 회색 톤 (검정 느낌 제거) */
-    section.main div.stButton > button[kind="secondary"] {
+    section.main div.stButton button[kind="secondary"] {
         background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%) !important;
         border: 1px solid #e2e8f0 !important;
         color: #64748b !important;
@@ -2131,7 +2246,7 @@ def inject_style():
         font-size: 15px !important;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
     }
-    section.main div.stButton > button[kind="secondary"]:hover {
+    section.main div.stButton button[kind="secondary"]:hover {
         background: #f8fafc !important;
         border-color: #cbd5e1 !important;
         color: #475569 !important;
@@ -2234,7 +2349,7 @@ def inject_dashboard_extra_style():
         fill: #ffffff !important;
         color: #ffffff !important;
     }
-    section.main [data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(3)):not(:has(> div[data-testid="column"]:nth-child(4))) div.stButton > button {
+    section.main [data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(3)):not(:has(> div[data-testid="column"]:nth-child(4))) div.stButton button {
         background: linear-gradient(165deg, #6ee7b7 0%, #34d399 50%, #10b981 100%) !important;
         border: 1px solid rgba(255, 255, 255, 0.45) !important;
         color: #ffffff !important;
@@ -2244,7 +2359,7 @@ def inject_dashboard_extra_style():
         box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4) !important;
         text-shadow: 0 1px 1px rgba(6, 78, 59, 0.25) !important;
     }
-    section.main [data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(3)):not(:has(> div[data-testid="column"]:nth-child(4))) div.stButton > button:hover {
+    section.main [data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(3)):not(:has(> div[data-testid="column"]:nth-child(4))) div.stButton button:hover {
         background: linear-gradient(165deg, #6ee7b7 0%, #059669 100%) !important;
         color: #ffffff !important;
     }
@@ -2357,7 +2472,7 @@ def inject_dashboard_extra_style():
         box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06) !important;
     }
     /* 학생 타일 — 크림 카드 + 부드러운 글자색 */
-    section.main [data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(5)) div.stButton > button {
+    section.main [data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(5)) div.stButton button {
         background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
         border: 1px solid #cbd5e1 !important;
         color: #475569 !important;
@@ -2368,7 +2483,7 @@ def inject_dashboard_extra_style():
         box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06) !important;
         text-shadow: none !important;
     }
-    section.main [data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(5)) div.stButton > button:hover {
+    section.main [data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(5)) div.stButton button:hover {
         background: #f8fafc !important;
         border-color: #94a3b8 !important;
         color: #334155 !important;
@@ -2450,6 +2565,10 @@ def ensure_session():
         st.session_state.dash_show_backup_panel = False
     if "dash_show_feedback_panel" not in st.session_state:
         st.session_state.dash_show_feedback_panel = False
+    if "dash_show_setup_panel" not in st.session_state:
+        st.session_state.dash_show_setup_panel = False
+    if "dash_show_manual_panel" not in st.session_state:
+        st.session_state.dash_show_manual_panel = False
     if "bulk_portfolio_gen_pending" not in st.session_state:
         st.session_state.bulk_portfolio_gen_pending = False
     if "bulk_zip_bytes" not in st.session_state:
@@ -2479,6 +2598,8 @@ def go_dashboard():
     st.session_state.portfolio_pdf_name = None
     st.session_state.dash_show_backup_panel = False
     st.session_state.dash_show_feedback_panel = False
+    st.session_state.dash_show_setup_panel = False
+    st.session_state.dash_show_manual_panel = False
     st.session_state.bulk_portfolio_gen_pending = False
     st.session_state.bulk_zip_show_options = False
     st.session_state.bulk_zip_bytes = None
@@ -2492,6 +2613,8 @@ NAV_SNAPSHOT_KEYS = (
     "bulk_zip_show_options",
     "dash_show_backup_panel",
     "dash_show_feedback_panel",
+    "dash_show_setup_panel",
+    "dash_show_manual_panel",
     "bulk_zip_bytes",
     "pending_confirm",
     "detail_expand_section",
@@ -2595,12 +2718,6 @@ def go_bulk_evaluation():
     st.session_state.student_id = int(students[0]["id"])
 
 
-def go_setup():
-    nav_push_before_leave()
-    st.session_state.view = "setup"
-    st.session_state.student_id = None
-
-
 def go_add_student():
     nav_push_before_leave()
     st.session_state.view = "add_student"
@@ -2613,12 +2730,6 @@ def go_admin():
     st.session_state.student_id = None
     st.session_state.pending_confirm = None
     st.session_state.pending_admin_confirm = None
-
-
-def go_user_manual():
-    nav_push_before_leave()
-    st.session_state.view = "user_manual"
-    st.session_state.student_id = None
 
 
 def auth_logout():
@@ -2820,6 +2931,11 @@ def build_portfolio_pdf(
         for r in records:
             draw_line(f"- {r['created_at']}", size=10)
             if kind == "counsel":
+                tlab = _counseling_topic_labels_display(
+                    _counseling_topics_decode(r["topics"])
+                )
+                if tlab:
+                    draw_line(f"  주제: {tlab}", size=10)
                 draw_line(f"  {r['content']}", size=10)
             elif kind == "behavior":
                 if (r["observation"] or "").strip():
@@ -2842,7 +2958,7 @@ def build_portfolio_pdf(
     if include_career:
         section("진로활동", career_rec, "life")
     if include_behavior:
-        section("행동발달 특기사항", behavior_rec, "behavior")
+        section("행동발달", behavior_rec, "behavior")
 
     draw_line("[교사 평가]", size=12, gap=17)
     if eval_row and any(eval_val(f"q{i}_score") for i in range(1, EVAL_ITEM_COUNT + 1)):
@@ -2951,7 +3067,10 @@ def build_all_portfolios_zip(
 
 
 def _clear_counseling_new_form_keys(student_id: int) -> None:
-    st.session_state.pop(f"new_counseling_content_{student_id}", None)
+    sid = int(student_id)
+    st.session_state.pop(f"new_counseling_content_{sid}", None)
+    for tkey, _ in COUNSELING_TOPIC_OPTIONS:
+        st.session_state.pop(f"nc_{tkey}_{sid}", None)
 
 
 def _clear_life_new_form_keys(student_id: int, cat_key: str) -> None:
@@ -2974,19 +3093,30 @@ DETAIL_EXTRA_LABELS = (
 def render_counseling_write_section(student_id: int):
     """개별 상담 입력 전용."""
     st.markdown("**새 상담 기록**")
-    with st.form("new_counseling", clear_on_submit=True):
+    st.caption("주제를 선택한 뒤, 상담 내용을 종합적으로 적어 주세요. (주제는 복수 선택 가능)")
+    sid = int(student_id)
+    with st.form(f"new_counseling_{sid}", clear_on_submit=True):
+        tcol1, tcol2 = st.columns(2)
+        for i, (tkey, tlab) in enumerate(COUNSELING_TOPIC_OPTIONS):
+            with tcol1 if i % 2 == 0 else tcol2:
+                st.checkbox(tlab, key=f"nc_{tkey}_{sid}")
         content = st.text_area(
-            "상담 내용",
+            "상담 종합 내용",
             height=200,
-            placeholder="오늘 상담 내용을 적어주세요.",
+            placeholder="오늘 상담 내용을 종합적으로 적어주세요.",
             label_visibility="collapsed",
-            key=f"new_counseling_content_{student_id}",
+            key=f"new_counseling_content_{sid}",
         )
         if st.form_submit_button("상담 내용 저장", type="primary"):
             if not content or not content.strip():
                 st.error("상담 내용을 입력해 주세요.")
             else:
-                add_counseling(student_id, content)
+                chosen = [
+                    tkey
+                    for tkey, _ in COUNSELING_TOPIC_OPTIONS
+                    if st.session_state.get(f"nc_{tkey}_{sid}")
+                ]
+                add_counseling(sid, content, chosen)
                 st.session_state._flash = "저장되었습니다."
                 _clear_counseling_new_form_keys(student_id)
                 rerun_detail_write_focus("counseling")
@@ -3001,6 +3131,15 @@ def _render_counseling_records(records):
         cid = r["id"]
         if st.session_state.get("editing_counseling_id") == cid:
             st.markdown(f"**{r['created_at']}**")
+            pref_topics = _counseling_topics_decode(r["topics"])
+            et1, et2 = st.columns(2)
+            for i, (tkey, tlab) in enumerate(COUNSELING_TOPIC_OPTIONS):
+                with et1 if i % 2 == 0 else et2:
+                    st.checkbox(
+                        tlab,
+                        value=(tkey in pref_topics),
+                        key=f"ec_{cid}_{tkey}",
+                    )
             edited = st.text_area(
                 "상담 내용 수정",
                 value=r["content"],
@@ -3009,11 +3148,20 @@ def _render_counseling_records(records):
             )
             e1, e2 = st.columns(2)
             if e1.button("저장", key=f"save_edit_{cid}", type="primary"):
-                if update_counseling(cid, edited):
-                    st.session_state.editing_counseling_id = None
-                    st.session_state._flash = "상담 기록이 수정되었습니다."
-                    rerun_detail_focus("counseling")
-                st.error("내용을 입력해 주세요.")
+                if not (edited or "").strip():
+                    st.error("내용을 입력해 주세요.")
+                else:
+                    echosen = [
+                        tkey
+                        for tkey, _ in COUNSELING_TOPIC_OPTIONS
+                        if st.session_state.get(f"ec_{cid}_{tkey}")
+                    ]
+                    if update_counseling(cid, edited, echosen):
+                        st.session_state.editing_counseling_id = None
+                        st.session_state._flash = "상담 기록이 수정되었습니다."
+                        rerun_detail_focus("counseling")
+                    else:
+                        st.error("저장에 실패했습니다.")
             if e2.button("취소", key=f"cancel_edit_{cid}"):
                 st.session_state.editing_counseling_id = None
                 rerun_detail_focus("counseling")
@@ -3028,6 +3176,11 @@ def _render_counseling_records(records):
             cr1, cr2 = st.columns([1, 0.22])
             with cr1:
                 st.markdown(f"**{r['created_at']}**")
+                tlab = _counseling_topic_labels_display(
+                    _counseling_topics_decode(r["topics"])
+                )
+                if tlab:
+                    st.caption(f"주제: {tlab}")
                 st.markdown(r["content"])
             with cr2:
                 b1, b2 = st.columns(2)
@@ -3707,9 +3860,9 @@ def render_dashboard():
     cn = settings.get("class_name", "")
     tn = settings.get("teacher_name", "")
     if sn and gr and cn and tn:
-        welcome = f"환영합니다! {sn} {gr}학년 {cn}반 {tn}선생님!"
+        welcome = f"👋 환영합니다! {sn} {gr}학년 {cn}반 {tn}선생님!"
     else:
-        welcome = "환영합니다! 담임 설정을 먼저 입력해 주세요."
+        welcome = "👋 환영합니다! 담임 설정을 먼저 입력해 주세요."
 
     # 오른쪽에 버튼이 많아 좁은 열에서 라벨이 줄바꿈되기 쉬움 → 버튼 쪽을 넓힘 (줄바꿈 방지는 CSS와 병행)
     h1, h2 = st.columns([4, 6])
@@ -3737,12 +3890,16 @@ def render_dashboard():
         with bh[idx]:
             idx += 1
             if st.button("🛠️ 기초작업", use_container_width=True, key="open_setup_page_btn"):
-                go_setup()
+                st.session_state.dash_show_setup_panel = not st.session_state.get(
+                    "dash_show_setup_panel", False
+                )
                 st.rerun()
         with bh[idx]:
             idx += 1
             if st.button("📖 설명서", use_container_width=True, key="open_user_manual_btn"):
-                go_user_manual()
+                st.session_state.dash_show_manual_panel = not st.session_state.get(
+                    "dash_show_manual_panel", False
+                )
                 st.rerun()
         with bh[idx]:
             idx += 1
@@ -3768,6 +3925,12 @@ def render_dashboard():
                 st.rerun()
 
     st.divider()
+    if st.session_state.get("dash_show_setup_panel"):
+        render_setup_roster_panel(key_prefix="dash_setup")
+        st.divider()
+    if st.session_state.get("dash_show_manual_panel"):
+        render_user_manual_panel_content(key_prefix="dash")
+        st.divider()
     if st.session_state.get("dash_show_backup_panel"):
         render_backup_restore_panel(key_prefix="dash_header")
         st.divider()
@@ -3778,6 +3941,7 @@ def render_dashboard():
     st.markdown('<p class="geo-section-highlight">📋 학생 개별 관리</p>', unsafe_allow_html=True)
 
     students = list_students()
+    st.caption(dashboard_roster_summary_line(settings, students))
     if not students:
         st.info(
             "이 계정의 명부에 학생이 없습니다. 기초작업에서 엑셀을 업로드하거나 +학생추가로 직접 입력해 주세요."
@@ -3805,7 +3969,6 @@ def render_dashboard():
 
     st.divider()
     st.markdown('<p class="geo-section-highlight">⚡ 학생 일괄 관리</p>', unsafe_allow_html=True)
-    st.caption("활동 기록, 평가, 포트폴리오를 여러 학생에게 한 번에 진행합니다.")
 
     _show_hub_pf_opts = st.session_state.get(
         "bulk_portfolio_gen_pending"
@@ -3826,7 +3989,7 @@ def render_dashboard():
         with hs[2]:
             st.checkbox("진로활동", value=True, key="hub_pf_inc_career")
         with hs[3]:
-            st.checkbox("행동발달 특기사항", value=True, key="hub_pf_inc_behavior")
+            st.checkbox("행동발달", value=True, key="hub_pf_inc_behavior")
 
     if st.session_state.get("bulk_portfolio_gen_pending"):
         st.warning("모든 학생의 포트폴리오를 생성하시겠습니까?")
@@ -3995,17 +4158,38 @@ def render_backup_restore_panel(*, key_prefix: str) -> None:
                 st.error(msg)
 
 
+def render_user_manual_panel_content(*, key_prefix: str = "dash") -> None:
+    st.markdown('<p class="geo-section-label">📖 사용 설명서</p>', unsafe_allow_html=True)
+    st.markdown(
+        """
+클래스 매니저는 학급 **명부·활동·평가**를 한 화면 흐름으로 묶은 웹 도구입니다.  
+기록은 빠르게, 정리는 분명하게—반복되는 담임 업무를 줄이는 데 맞춰 두었습니다.
+
+- **명부**: 엑셀 서식으로 한 번에 올리고, 학생별 화면에서 세부 정보를 다룹니다.
+- **일괄**: 여러 학생을 묶어 활동·평가를 남겨, 같은 입력을 반복하지 않습니다.
+- **보관**: 백업으로 반 자료를 내보내고, 필요할 때 복원할 수 있습니다.
+
+화면 구성과 단계별 안내는 **PDF 설명서**에서 이어집니다.
+        """,
+    )
+    st.caption("아래 버튼으로 상세 설명서를 받을 수 있습니다. (파일은 준비 중입니다.)")
+    if st.button(
+        "설명서 다운",
+        type="primary",
+        use_container_width=True,
+        key=f"user_manual_pdf_btn_{key_prefix}",
+    ):
+        st.info("상세 설명서 PDF는 준비 중입니다. 곧 이 버튼에서 내려받을 수 있게 연결할 예정입니다.")
+
+
 def render_user_manual_page():
     inject_dashboard_extra_style()
     show_flash()
-    st.markdown('<p class="geo-section-label">📖 사용 설명서</p>', unsafe_allow_html=True)
-    st.info("이 화면에 사용 방법을 정리하고, PDF 다운로드 버튼을 두는 작업은 추후 협의하여 진행합니다.")
+    render_user_manual_panel_content(key_prefix="page")
 
 
-def render_setup_page():
-    inject_dashboard_extra_style()
-    show_flash()
-
+def render_setup_roster_panel(*, key_prefix: str) -> None:
+    """엑셀 서식 다운로드·명단 업로드만 (백업/복원 제외)."""
     st.markdown('<p class="geo-section-label">🛠️ 기초작업</p>', unsafe_allow_html=True)
     st.caption("엑셀 서식 다운로드와 업로드를 여기서 진행합니다.")
 
@@ -4017,26 +4201,27 @@ def render_setup_page():
             file_name=ROSTER_TEMPLATE_DOWNLOAD_NAME,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
-            key="download_excel_template_setup",
+            key=f"download_excel_template_{key_prefix}",
         )
     with a2:
         uploaded_xlsx = st.file_uploader(
             "엑셀 업로드",
             type=["xlsx"],
-            key=f"roster_excel_upload_{st.session_state.uploader_nonce}",
+            key=f"roster_excel_upload_{key_prefix}_{st.session_state.uploader_nonce}",
         )
 
     up = uploaded_xlsx
     if up is None:
-        st.session_state.pop("_roster_import_sig", None)
+        st.session_state.pop(f"_roster_import_sig_{key_prefix}", None)
     else:
         raw = up.getvalue()
         sig = (up.name, hashlib.md5(raw).hexdigest())
-        if st.session_state.get("_roster_import_sig") != sig:
+        sig_key = f"_roster_import_sig_{key_prefix}"
+        if st.session_state.get(sig_key) != sig:
             added, updated, blank, err = import_students_from_excel_bytes(
                 raw, acting_user_id=st.session_state.get("auth_user_id")
             )
-            st.session_state._roster_import_sig = sig
+            st.session_state[sig_key] = sig
             st.session_state.uploader_nonce += 1
             if err:
                 st.error(err)
@@ -4053,8 +4238,11 @@ def render_setup_page():
                 )
                 st.rerun()
 
-    st.divider()
-    render_backup_restore_panel(key_prefix="setup")
+
+def render_setup_page():
+    inject_dashboard_extra_style()
+    show_flash()
+    render_setup_roster_panel(key_prefix="setup_page")
 
 
 def render_add_student_page():
@@ -4062,24 +4250,18 @@ def render_add_student_page():
     show_flash()
 
     st.markdown('<p class="geo-section-label">🧾 학생 직접 추가</p>', unsafe_allow_html=True)
-    st.caption("엑셀 서식 항목을 설문 형태로 직접 입력합니다. (학번·이름 필수)")
+    st.caption("학번·이름은 필수입니다. 취미·희망 진로는 학생 상세 화면이나 엑셀로 입력할 수 있습니다.")
 
     with st.form("add_student_form", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            number = st.text_input("학번 *", placeholder="예: 20104")
-            name = st.text_input("이름 *", placeholder="예: 홍길동")
-            gender = st.selectbox("성별", options=["", "남", "여"], index=0)
-            student_phone = st.text_input(
-                "본인 휴대폰 번호", placeholder="예: 010-1234-5678"
-            )
-        with c2:
-            primary_guardian = st.text_input("주 보호자", placeholder="예: 어머니")
-            guardian_phone = st.text_input(
-                "보호자 휴대폰 번호", placeholder="예: 010-9876-5432"
-            )
-            hobbies_skills = st.text_input("취미나 특기", placeholder="예: 독서, 축구")
-            career_interest = st.text_input("희망 진로", placeholder="예: 데이터 사이언티스트")
+        number = st.text_input("학번 *", placeholder="예: 20104")
+        name = st.text_input("이름 *", placeholder="예: 홍길동")
+        gender = st.selectbox("성별", options=["", "남", "여"], index=0)
+        student_phone = st.text_input(
+            "본인 휴대폰 번호", placeholder="예: 010-1234-5678"
+        )
+        guardian_phone = st.text_input(
+            "보호자 휴대폰 번호", placeholder="예: 010-9876-5432"
+        )
 
         submitted = st.form_submit_button("추가하기", type="primary")
         if submitted:
@@ -4088,10 +4270,7 @@ def render_add_student_page():
                 name=name,
                 gender=gender,
                 student_phone=student_phone,
-                primary_guardian=primary_guardian,
                 guardian_phone=guardian_phone,
-                hobbies_skills=hobbies_skills,
-                career_interest=career_interest,
             )
             if ok:
                 st.session_state._flash = f"{number.strip()} {name.strip()} 학생이 추가되었습니다."
@@ -4379,7 +4558,7 @@ def render_detail(student_id: int):
             with q3:
                 st.checkbox("진로활동", value=True, key="portfolio_inc_career")
             with q4:
-                st.checkbox("행동발달 특기사항", value=True, key="portfolio_inc_behavior")
+                st.checkbox("행동발달", value=True, key="portfolio_inc_behavior")
         c_yes, c_no = st.columns(2)
         if c_yes.button("확인", key="pending_confirm_yes", type="primary"):
             if typ == "delete_student" and pid == student_id:
@@ -4483,6 +4662,39 @@ def render_detail(student_id: int):
 
     st.divider()
     st.markdown(
+        '<p class="geo-section-label" style="margin-bottom:0.35rem;">🎯 진로 희망</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "학생 명부의 희망 진로 항목입니다. 짧게 적어 주세요."
+    )
+    _career_key = f"_detail_career_interest_{student_id}"
+    if _career_key not in st.session_state:
+        # sqlite3.Row 는 dict 가 아니라 .get() 이 없음 — 키로만 접근
+        st.session_state[_career_key] = str(row["career_interest"] or "")
+    with st.form(f"student_career_hope_{student_id}"):
+        fc1, fc2 = st.columns([5, 1])
+        with fc1:
+            ta_val = st.text_input(
+                "진로 희망",
+                max_chars=120,
+                placeholder="예: 간호사, 컴퓨터공학과",
+                label_visibility="collapsed",
+                key=_career_key,
+            )
+        with fc2:
+            career_saved = st.form_submit_button("저장", type="primary", use_container_width=True)
+    if career_saved:
+        raw = (ta_val or "").strip()
+        ok_fb, err_fb = update_student_career_interest(student_id, raw)
+        if ok_fb:
+            st.session_state.pop(_career_key, None)
+            st.session_state._flash = "진로 희망을 저장했습니다."
+            st.rerun()
+        st.error(err_fb or "저장에 실패했습니다.")
+
+    st.divider()
+    st.markdown(
         '<p class="geo-section-label" style="margin-bottom:0.75rem;">📝 기록하기</p>',
         unsafe_allow_html=True,
     )
@@ -4498,7 +4710,7 @@ def render_detail(student_id: int):
     with st.expander("진로활동", expanded=(wex == "career")):
         render_life_write_section(student_id, "career")
 
-    with st.expander("행동발달 특기사항", expanded=(wex == "behavior")):
+    with st.expander("행동발달", expanded=(wex == "behavior")):
         render_life_write_section(student_id, "behavior")
 
     st.divider()
@@ -4518,7 +4730,7 @@ def render_detail(student_id: int):
     with st.expander("진로활동", expanded=(dex == "career")):
         render_life_section(student_id, "career")
 
-    with st.expander("행동발달 특기사항", expanded=(dex == "behavior")):
+    with st.expander("행동발달", expanded=(dex == "behavior")):
         render_life_section(student_id, "behavior")
 
     st.divider()
