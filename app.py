@@ -368,6 +368,80 @@ def create_app_user(
     return True, ""
 
 
+def _read_seed_admin_creds() -> tuple[str | None, str | None]:
+    """
+    Streamlit Cloud / 서버 배포용: 비밀에 관리자 아이디·비밀번호가 있으면 읽습니다.
+    우선순위: 환경 변수 → st.secrets (평탄 키 → [class_manager] 섹션).
+    로컬 개발: .streamlit/secrets.toml (Git에 올리지 마세요.)
+    """
+    u_env = (os.environ.get("CLASSMANAGER_ADMIN_USERNAME") or "").strip()
+    p_env = os.environ.get("CLASSMANAGER_ADMIN_PASSWORD") or ""
+    if u_env and len(p_env) >= 8:
+        return u_env.lower(), p_env
+
+    try:
+        sec = st.secrets
+    except Exception:
+        return None, None
+
+    for uk, pk in (
+        ("CLASSMANAGER_ADMIN_USERNAME", "CLASSMANAGER_ADMIN_PASSWORD"),
+        ("ADMIN_USERNAME", "ADMIN_PASSWORD"),
+    ):
+        try:
+            vu, vp = sec[uk], sec[pk]
+            u, p = str(vu).strip(), str(vp)
+            if u and len(p) >= 8:
+                return u.lower(), p
+        except (KeyError, TypeError):
+            continue
+
+    try:
+        cm = sec["class_manager"]
+        u = str(cm["admin_username"]).strip()
+        p = str(cm["admin_password"])
+        if u and len(p) >= 8:
+            return u.lower(), p
+    except (KeyError, TypeError):
+        pass
+    return None, None
+
+
+def ensure_seed_admin_account() -> None:
+    """
+    배포 DB와 로컬 DB가 달라 로그인이 안 될 때: Secrets에 넣은 계정으로 관리자를 만들거나
+    비밀번호·역할·승인 상태를 맞춥니다. (앱 시작 시 1회 반영)
+    """
+    raw_u, password = _read_seed_admin_creds()
+    if not raw_u or not password:
+        return
+    u = raw_u.strip().lower()
+    if len(u) < 3 or len(u) > 64 or not re.fullmatch(r"[a-z0-9_]+", u):
+        return
+    row = get_app_user_by_username(u)
+    ph = _hash_password_plain(password)
+    if row:
+        with get_connection() as conn:
+            conn.execute(
+                """
+                UPDATE app_users
+                SET password_hash = ?, role = 'admin', status = 'approved'
+                WHERE id = ?
+                """,
+                (ph, int(row["id"])),
+            )
+            conn.commit()
+    else:
+        create_app_user(
+            username=u,
+            password=password,
+            display_name="",
+            request_note="",
+            role="admin",
+            status="approved",
+        )
+
+
 def try_app_login(username: str, password: str):
     u = get_app_user_by_username(username)
     if not u or not _verify_password_plain(password, u["password_hash"]):
@@ -4767,6 +4841,7 @@ def main():
     inject_style()
     init_db()
     ensure_session()
+    ensure_seed_admin_account()
 
     if count_app_users() == 0:
         render_bootstrap_admin()
