@@ -407,6 +407,90 @@ def _read_seed_admin_creds() -> tuple[str | None, str | None]:
     return None, None
 
 
+def _truthy_config_flag(raw) -> bool:
+    if raw is None:
+        return False
+    s = str(raw).strip().lower()
+    return s in ("1", "true", "yes", "on")
+
+
+def single_admin_mode_enabled() -> bool:
+    """Secrets / 환경 변수 CLASSMANAGER_SINGLE_ADMIN 등."""
+    v = (os.environ.get("CLASSMANAGER_SINGLE_ADMIN") or "").strip()
+    if v:
+        return _truthy_config_flag(v)
+    try:
+        sec = st.secrets
+    except Exception:
+        return False
+    for key in ("CLASSMANAGER_SINGLE_ADMIN", "single_admin"):
+        try:
+            if _truthy_config_flag(sec[key]):
+                return True
+        except (KeyError, TypeError):
+            continue
+    try:
+        cm = sec["class_manager"]
+        if _truthy_config_flag(cm["single_admin"]):
+            return True
+    except (KeyError, TypeError):
+        pass
+    return False
+
+
+def read_config_admin_username() -> str | None:
+    """단일 관리자 기준 아이디(비밀번호 없이 설정만 읽을 때)."""
+    u_env = (os.environ.get("CLASSMANAGER_ADMIN_USERNAME") or "").strip().lower()
+    if u_env and len(u_env) >= 3 and len(u_env) <= 64 and re.fullmatch(r"[a-z0-9_]+", u_env):
+        return u_env
+
+    try:
+        sec = st.secrets
+    except Exception:
+        return None
+
+    for uk in ("CLASSMANAGER_ADMIN_USERNAME", "ADMIN_USERNAME"):
+        try:
+            u = str(sec[uk]).strip().lower()
+            if u and len(u) >= 3 and len(u) <= 64 and re.fullmatch(r"[a-z0-9_]+", u):
+                return u
+        except (KeyError, TypeError):
+            continue
+
+    try:
+        cm = sec["class_manager"]
+        u = str(cm["admin_username"]).strip().lower()
+        if u and len(u) >= 3 and len(u) <= 64 and re.fullmatch(r"[a-z0-9_]+", u):
+            return u
+    except (KeyError, TypeError):
+        pass
+    return None
+
+
+def enforce_single_admin_account() -> None:
+    """
+    단일 관리자 모드: Secrets에 적은 관리자 아이디만 admin 유지, 나머지 admin은 user로 강등.
+    기준 계정이 DB에 없으면 실행하지 않음(잘못된 설정으로 전원 잠금 방지).
+    """
+    if not single_admin_mode_enabled():
+        return
+    canon = read_config_admin_username()
+    if not canon:
+        return
+    row = get_app_user_by_username(canon)
+    if not row:
+        return
+    with get_connection() as conn:
+        conn.execute(
+            """
+            UPDATE app_users SET role = 'user'
+            WHERE role = 'admin' AND lower(username) != ?
+            """,
+            (canon,),
+        )
+        conn.commit()
+
+
 def ensure_seed_admin_account() -> None:
     """
     배포 DB와 로컬 DB가 달라 로그인이 안 될 때: Secrets에 넣은 계정으로 관리자를 만들거나
@@ -3767,6 +3851,12 @@ def render_admin_page():
     if err_del:
         st.error(err_del)
 
+    if single_admin_mode_enabled() and read_config_admin_username():
+        st.caption(
+            "단일 관리자 모드: Secrets에 지정한 관리자 아이디만 관리자 권한이 유지됩니다. "
+            "다른 계정은 관리자로 승격되지 않습니다."
+        )
+
     st.markdown('<p class="geo-section-label">💬 의견 보내기 쪽지</p>', unsafe_allow_html=True)
     st.caption(
         "사용자가 보낸 의견입니다. **읽음 처리**하면 보낸 분의 메인 화면(의견 보내기)에서도 확인할 수 있습니다."
@@ -4842,6 +4932,7 @@ def main():
     init_db()
     ensure_session()
     ensure_seed_admin_account()
+    enforce_single_admin_account()
 
     if count_app_users() == 0:
         render_bootstrap_admin()
