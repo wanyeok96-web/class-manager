@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light" />
+    <title>클래스 매니저</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app-shell" id="appShell">
+      <p class="hero-copyright">
+        <span>© 2026 클래스 매니저</span>
+        <span class="hero-copyright__sep" aria-hidden="true"></span>
+        <span>made by 경기 이솔고등학교 교사 이왕혁</span>
+      </p>
+
+      <header class="hero card">
+        <p class="hero-badge">🏫선생님의 똑똑한 보조담임</p>
+        <h1 class="hero-title">🎓🤖 클래스 매니저 📋✏️</h1>
+        <p class="hero-desc">기록은 간편하게, 관리는 꼼꼼하게, 정리는 스마트하게.</p>
+      </header>
+
+      <nav class="tab-nav-wrap">
+        <div class="tab-nav-row">
+          <div class="tab-nav" role="tablist" aria-label="메인 메뉴">
+            <button type="button" class="tab" role="tab" aria-selected="false" data-tab-target="office">관리실</button>
+            <button type="button" class="tab is-active" role="tab" aria-selected="true" data-tab-target="home">홈</button>
+            <button type="button" class="tab" role="tab" aria-selected="false" data-tab-target="roster">학생 일괄 관리</button>
+            <button type="button" class="tab" role="tab" aria-selected="false" data-tab-target="student-individual">학생 개별 관리</button>
+            <button type="button" class="tab" role="tab" aria-selected="false" data-tab-target="counsel">상담관리</button>
+            <button type="button" class="tab" role="tab" aria-selected="false" data-tab-target="portfolio">포트폴리오 생성</button>
+          </div>
+        </div>
+      </nav>
+
+      <main class="tab-panels">
+        <section class="tab-panel" data-tab-panel="office" id="panel-office" hidden>
+          <div class="panel-head">
+            <h2>관리실</h2>
+            <p>학급·시간표·자료 관리와 데이터 관리를 한곳에서 다룹니다.</p>
+          </div>
+          <div class="cm-settings-stack cm-office-stack">
+            <div class="cm-settings-card cm-mgmt-card">
+              <h3 class="cm-card__title">1️⃣ 기초 설정</h3>
+              <form id="homeroomBasicForm" class="form-grid cm-form-grid-2">
+                <label class="school-filter-field">
+                  <span class="school-filter-label">학교명</span>
+                  <input class="school-filter-select cm-input-text" id="setSchool" type="text" maxlength="60" />
+                </label>
+                <label class="school-filter-field">
+                  <span class="school-filter-label">학년</span>
+                  <input class="school-filter-select cm-input-text" id="setGrade" type="text" maxlength="10" placeholder="2" />
+                </label>
+                <label class="school-filter-field">
+                  <span class="school-filter-label">반</span>
+                  <input class="school-filter-select cm-input-text" id="setClassNum" type="text" maxlength="10" placeholder="3" />
+                </label>
+                <label class="school-filter-field">
+                  <span class="school-filter-label">담임 성함</span>
+                  <input class="school-filter-select cm-input-text" id="setTeacher" type="text" maxlength="40" />
+                </label>
+                <div class="cm-form-actions cm-span-2">
+                  <button type="submit" class="primary-btn cm-mgmt-btn">학급 정보 저장</button>
+                </div>
+              </form>
+            </div>
+            <div class="cm-settings-card cm-mgmt-card">
+              <h3 class="cm-card__title">2️⃣ 시간표 입력</h3>
+              <p class="cm-settings-note">월~금, 1~7교시 기준입니다. (화면에 표시하는 위치는 추후 연결 예정입니다.)</p>
+              <div class="cm-tt-input-split">
+                <div class="cm-tt-input-split__col">
+                  <h4 class="cm-tt-input-subtitle">담임학급 시간표</h4>
+                  <div id="classGridTimetableHost" class="cm-grid-tt-host"></div>
+                </div>
+                <div class="cm-tt-input-split__col">
+                  <h4 class="cm-tt-input-subtitle">교사시간표</h4>
+                  <div id="teacherGridTimetableHost" class="cm-grid-tt-host"></div>
+                </div>
+              </div>
+              <div class="cm-form-actions">
+                <button type="button" class="primary-btn cm-mgmt-btn" id="btnSaveGridTimetables">시간표 저장</button>
+              </div>
+            </div>
+            <div class="cm-settings-card cm-mgmt-card">
+              <h3 class="cm-card__title">3️⃣ 자료 관리</h3>
+              <h4 class="cm-tt-input-subtitle">나이스 자료</h4>
+              <div class="cm-download-path-card" role="region" aria-label="나이스 다운로드 경로">
+                <h4 class="cm-download-path-card__title">다운로드 경로</h4>
+                <ul class="cm-download-path-list">
+                  <li><strong>학생 명단 업로드</strong>: 나이스-학급담임-학적-기본학적 관리-명렬표 출력-조회 후 엑셀 내려받기</li>
+                  <li><strong>학생 동아리 업로드</strong>: 나이스-학급담임-학생생활-창의적 체험활동-동아리 활동 관리-부서배정-조회-출력 클릭하여 엑셀로 저장</li>
+                  <li><strong>학생 시간표 업로드</strong>: 나이스-학급담임-교육과정-시간표 관리-학생별 시간표 조회-조회-학생 전체 선택-선택출력 후 엑셀로 저장</li>
+                </ul>
+              </div>
+              <div class="cm-neis-upload-row cm-mgmt-upload-row">
+                <label class="btn-secondary cm-file-label cm-neis-upload-btn cm-mgmt-btn">
+                  학생 명단 업로드
+                  <input type="file" id="rosterExcelImport" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden />
+                </label>
+                <label class="btn-secondary cm-file-label cm-neis-upload-btn cm-mgmt-btn">
+                  학생 동아리 업로드
+                  <input type="file" id="neisClubImport" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden />
+                </label>
+                <label class="btn-secondary cm-file-label cm-neis-upload-btn cm-mgmt-btn">
+                  1학기 시간표 업로드
+                  <input type="file" id="neisTimetableImportS1" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden />
+                </label>
+                <label class="btn-secondary cm-file-label cm-neis-upload-btn cm-mgmt-btn">
+                  2학기 시간표 업로드
+                  <input type="file" id="neisTimetableImportS2" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden />
+                </label>
+              </div>
+              <h4 class="cm-tt-input-subtitle cm-data-room-subhd-spaced">클래스매니저 자료</h4>
+              <p class="cm-settings-note">기본정보 관리·참여행사 목록은 엑셀 서식을 내려받은 뒤 작성하여 올릴 수 있습니다. (학생 일괄 관리 화면과 같은 결과입니다.)</p>
+              <div class="cm-neis-upload-row cm-mgmt-upload-row">
+                <button type="button" class="btn-secondary cm-mgmt-btn" id="btnDataRoomRosterExport">기본정보 엑셀 서식 내려받기</button>
+                <button type="button" class="btn-secondary cm-mgmt-btn" id="btnDataRoomRosterImport">기본정보 엑셀 업로드</button>
+                <button type="button" class="btn-secondary cm-mgmt-btn" id="btnDataRoomEventCatalogExport">참여행사 목록 엑셀 서식 내려받기</button>
+                <label class="btn-secondary cm-file-label cm-neis-upload-btn cm-mgmt-btn">
+                  참여행사 목록 엑셀 업로드
+                  <input type="file" id="rosterEventCatalogImport" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden />
+                </label>
+              </div>
+            </div>
+            <div class="cm-settings-card cm-mgmt-card">
+              <h3 class="cm-card__title">4️⃣ 데이터 관리</h3>
+              <div class="cm-toolbar cm-mgmt-upload-row">
+                <button type="button" class="primary-btn cm-mgmt-btn" id="btnExportJson">백업 파일 다운로드</button>
+                <label class="btn-secondary cm-file-label cm-mgmt-btn">
+                  백업 파일 업로드
+                  <input type="file" id="importJsonFile" accept="application/json,.json" hidden />
+                </label>
+              </div>
+              <p class="cm-settings-note cm-settings-note--spaced">학생·상담·봉사·평가가 모두 삭제됩니다. 먼저 백업 파일을 받아 두는 것을 권장합니다.</p>
+              <button type="button" class="btn-danger cm-mgmt-btn cm-mgmt-btn--danger" id="btnOpenResetModal">전체 삭제…</button>
+            </div>
+          </div>
+        </section>
+        <section class="tab-panel is-active" data-tab-panel="home" id="panel-home">
+          <div class="panel-head cm-home-welcome">
+            <h2 id="homePanelTitle" class="cm-home-panel-title">선생님, 오늘도 좋은 하루가 될거에요 :)</h2>
+          </div>
+          <div class="cm-home-dashboard">
+            <div class="card cm-card cm-home-dashboard__calendar">
+              <div class="cm-home-cal-toolbar">
+                <button type="button" class="btn-secondary cm-home-cal-nav" data-home-action="cal-prev" aria-label="이전 달">◀</button>
+                <h3 class="cm-home-cal-title" id="homeCalTitle">2026년 5월</h3>
+                <button type="button" class="btn-secondary cm-home-cal-nav" data-home-action="cal-next" aria-label="다음 달">▶</button>
+                <button type="button" class="primary-btn cm-home-cal-today" data-home-action="cal-today">오늘</button>
+              </div>
+              <div id="homeCalendarHost" class="cm-home-cal-host" role="grid" aria-label="월 달력"></div>
+            </div>
+            <div class="cm-home-dashboard__side">
+              <div class="card cm-card cm-home-side-card cm-home-tt-pair-card">
+                <p class="cm-home-selected-line" id="homeSelectedLine"></p>
+                <div class="cm-home-tt-split">
+                  <div class="cm-home-tt-split__col">
+                    <h3 class="cm-card__title cm-home-side-title">우리반 시간표</h3>
+                    <div id="homeClassTimetableHost" class="cm-home-tt-host"></div>
+                  </div>
+                  <div class="cm-home-tt-split__col cm-home-tt-split__col--teacher">
+                    <h3 class="cm-card__title cm-home-side-title">나의 시간표</h3>
+                    <div id="homeTeacherTimetableHost" class="cm-home-tt-host"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="card cm-card cm-home-side-card" id="homeTodoCard">
+                <h3 class="cm-card__title cm-home-side-title">오늘의 할 일</h3>
+                <div id="homeTodoHost" class="cm-home-todo-host"></div>
+                <div class="cm-home-todo-add" id="homeTodoAddWrap" hidden>
+                  <input type="text" class="school-filter-select cm-input-text" id="homeTodoNewInput" maxlength="200" placeholder="할 일 입력 후 추가" />
+                  <button type="button" class="btn-secondary" data-home-action="todo-add">추가</button>
+                </div>
+                <p class="cm-home-muted" id="homeTodoMuted" hidden>주말·공휴일에는 할 일 목록을 사용하지 않습니다.</p>
+              </div>
+              <div class="card cm-card cm-home-side-card" id="homeAttCard">
+                <div class="cm-home-att-head">
+                  <h3 class="cm-card__title cm-home-side-title">학생 출결</h3>
+                  <div class="cm-home-att-actions">
+                    <button type="button" class="btn-secondary" id="openAttCalModal">캘린더 보기</button>
+                    <button type="button" class="btn-secondary cm-home-att-save" data-home-action="att-save" id="homeAttSaveBtn">출결 저장</button>
+                  </div>
+                </div>
+                <div id="homeAttendanceHost" class="cm-home-att-host"></div>
+                <p class="cm-home-muted" id="homeAttMuted" hidden>주말·공휴일에는 출결을 기록하지 않습니다.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="tab-panel" data-tab-panel="roster" id="panel-roster" hidden>
+          <div class="panel-head">
+            <h2>학생 일괄 관리</h2>
+          </div>
+
+          <div class="cm-roster-work card cm-card cm-roster-work--indexed">
+            <div class="cm-roster-index-row" role="tablist" aria-label="학생 일괄 구역">
+              <button type="button" class="cm-roster-index-tab" role="tab" data-roster-folder="basic" aria-selected="false" aria-controls="rosterSectionBasic" id="rosterTabBasic">기본정보</button>
+              <button type="button" class="cm-roster-index-tab" role="tab" data-roster-folder="electives" aria-selected="false" aria-controls="rosterSectionElectives" id="rosterTabElectives">선택과목</button>
+              <button type="button" class="cm-roster-index-tab" role="tab" data-roster-folder="club" aria-selected="false" aria-controls="rosterSectionClub" id="rosterTabClub">동아리</button>
+              <button type="button" class="cm-roster-index-tab" role="tab" data-roster-folder="volunteer" aria-selected="false" aria-controls="rosterSectionVolunteer" id="rosterTabVolunteer">봉사활동</button>
+              <button type="button" class="cm-roster-index-tab" role="tab" data-roster-folder="events" aria-selected="false" aria-controls="rosterSectionEvents" id="rosterTabEvents">참여행사</button>
+            </div>
+            <div class="cm-roster-index-panel">
+              <p id="rosterFolderPlaceholder" class="cm-roster-index-placeholder" hidden>위 인덱스에서 항목을 선택하면 내용이 여기에 표시됩니다.</p>
+
+              <div id="rosterSectionBasic" class="cm-roster-section" role="tabpanel" aria-labelledby="rosterTabBasic" hidden>
+              <div class="cm-card__head">
+                <h3 class="cm-card__title">기본정보 관리</h3>
+                <div class="cm-roster-basic-actions">
+                  <button type="button" class="btn-secondary" id="btnRosterExportExcel">엑셀 내려받기</button>
+                  <button type="button" class="btn-secondary" id="btnRosterImportExcel">엑셀 업로드</button>
+                  <button type="button" class="primary-btn" id="openAddStudentModal">학생 추가</button>
+                </div>
+              </div>
+              <div class="cm-card__body">
+                <div class="data-table data-table--roster data-table--roster-basic" role="region">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>번호</th>
+                        <th>이름</th>
+                        <th>성별</th>
+                        <th>학생 연락처</th>
+                        <th>학부모 연락처</th>
+                        <th>진로희망</th>
+                        <th>1인 1역</th>
+                        <th>개별 시간표</th>
+                        <th class="col-roster-del" aria-label="삭제"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="rosterTableBody"></tbody>
+                  </table>
+                </div>
+                <p class="cm-empty-hint" id="rosterEmpty" hidden>등록된 학생이 없습니다.</p>
+              </div>
+            </div>
+
+              <div id="rosterSectionElectives" class="cm-roster-section" role="tabpanel" aria-labelledby="rosterTabElectives" hidden>
+              <div class="cm-card__head cm-card__head--block">
+                <h3 class="cm-card__title">선택과목 관리</h3>
+              </div>
+              <div class="cm-card__body">
+                <p class="cm-settings-note">학기별로 과목 3개씩 입력합니다. 엑셀은 「1학기 과목1」~「2학기 과목3」 열(또는 기존 「선택과목」 한 열)로 가져올 수 있습니다.</p>
+                <div class="data-table data-table--roster-electives" role="region">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th rowspan="2" class="cm-roster-electives-th-num">번호</th>
+                        <th rowspan="2" class="cm-roster-electives-th-name">이름</th>
+                        <th colspan="3">1학기 선택과목</th>
+                        <th colspan="3">2학기 선택과목</th>
+                      </tr>
+                      <tr>
+                        <th>과목 1</th>
+                        <th>과목 2</th>
+                        <th>과목 3</th>
+                        <th>과목 1</th>
+                        <th>과목 2</th>
+                        <th>과목 3</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rosterElectivesTableBody"></tbody>
+                  </table>
+                </div>
+                <p class="cm-empty-hint" id="rosterElectivesEmpty" hidden>등록된 학생이 없습니다.</p>
+              </div>
+            </div>
+
+              <div id="rosterSectionClub" class="cm-roster-section" role="tabpanel" aria-labelledby="rosterTabClub" hidden>
+              <div class="cm-card__head cm-card__head--block">
+                <h3 class="cm-card__title">동아리</h3>
+              </div>
+              <div class="cm-card__body">
+                <p class="cm-settings-note">관리실에서 NEIS <strong>학생 동아리</strong> 엑셀을 올리면 동아리·활동 장소·담당교사 열이 있을 때 아래에 반영됩니다. 필요하면 직접 수정할 수 있습니다.</p>
+                <div class="data-table data-table--roster data-table--roster-club" role="region">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>번호</th>
+                        <th>이름</th>
+                        <th>동아리</th>
+                        <th>활동 장소</th>
+                        <th>담당교사</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rosterClubTableBody"></tbody>
+                  </table>
+                </div>
+                <p class="cm-empty-hint" id="rosterClubEmpty" hidden>등록된 학생이 없습니다.</p>
+              </div>
+            </div>
+
+              <div id="rosterSectionVolunteer" class="cm-roster-section" role="tabpanel" aria-labelledby="rosterTabVolunteer" hidden>
+              <div class="cm-card__head cm-card__head--volunteer-toolbar">
+                <h3 class="cm-card__title">봉사활동 관리</h3>
+                <button type="button" class="primary-btn" id="btnRosterVolunteerSave">저장</button>
+              </div>
+              <div class="cm-card__body">
+                <p class="cm-settings-note">표에서 입력한 뒤 <strong>저장</strong>을 누르면 반영됩니다. 학생 개별 관리 화면의 봉사 내역과도 동일한 데이터입니다.</p>
+                <div class="data-table data-table--volunteer-edit" role="region">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>학생</th>
+                        <th>학기</th>
+                        <th>활동</th>
+                        <th>시간</th>
+                        <th class="col-roster-del" aria-label="삭제"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="rosterVolTableBody"></tbody>
+                  </table>
+                </div>
+                <div class="cm-volunteer-table-footer">
+                  <button type="button" class="btn-secondary cm-volunteer-add-row" id="btnRosterVolunteerAddRow" aria-label="입력 행 추가">+</button>
+                </div>
+                <p class="cm-empty-hint" id="rosterVolEmpty" hidden>등록된 학생이 없습니다. 학생 일괄 관리에서 명단을 먼저 등록하세요.</p>
+              </div>
+            </div>
+
+              <div id="rosterSectionEvents" class="cm-roster-section" role="tabpanel" aria-labelledby="rosterTabEvents" hidden>
+              <div class="cm-card__head cm-card__head--block cm-card__head--roster-events">
+                <h3 class="cm-card__title">참여행사 관리</h3>
+                <div class="cm-roster-basic-actions">
+                  <button type="button" class="btn-secondary" id="btnRosterEventCatalogExport">행사 목록 엑셀 내려받기</button>
+                  <button type="button" class="btn-secondary" id="btnRosterEventCatalogImport">행사 목록 엑셀 업로드</button>
+                  <button type="button" class="primary-btn cm-btn-roster-catalog-view" id="btnRosterEventCatalogView">행사목록 확인</button>
+                </div>
+              </div>
+              <div class="cm-card__body">
+                <p class="cm-settings-note">
+                  <strong>행사 목록</strong>은 엑셀(순번·행사명·시행월·참가대상·담당부서·활동내용기록항목)으로 등록합니다. 학생 표의 각 칸은 목록을 참고해 <strong>같은 한 줄 입력란</strong>에서 고르거나(아래 제안) 직접 타이핑하면 됩니다. 비어 있으면 <strong>선택 or 직접입력</strong> 안내가 보이며, 칸을 누르면 언제든지 바꿀 수 있습니다. 전체 명단 엑셀의 「참여행사」와 「1학기참여1」~「2학기참여5」 열과도 맞춰 둡니다.
+                </p>
+                <div class="data-table data-table--roster-events" role="region">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>번호</th>
+                        <th>이름</th>
+                        <th>참여 행사</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rosterEventsTableBody"></tbody>
+                  </table>
+                </div>
+                <p class="cm-empty-hint" id="rosterEventsEmpty" hidden>등록된 학생이 없습니다.</p>
+              </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="tab-panel" data-tab-panel="student-individual" id="panel-student-individual" hidden>
+          <div class="panel-head">
+            <h2>학생 개별 관리</h2>
+          </div>
+          <div id="studentIndividualListView">
+            <div class="card cm-card">
+              <div class="cm-card__body">
+                <div id="studentIndividualButtonHost" class="cm-student-individual-grid" role="list"></div>
+                <p class="cm-empty-hint" id="studentIndividualEmpty" hidden>등록된 학생이 없습니다. 학생 일괄 관리에서 명단을 등록하세요.</p>
+              </div>
+            </div>
+          </div>
+          <div id="studentIndividualDetailView" hidden>
+            <div id="studentIndividualDetailHost" class="cm-student-individual-detail-host"></div>
+          </div>
+        </section>
+
+        <section class="tab-panel" data-tab-panel="counsel" id="panel-counsel" hidden>
+          <div class="panel-head">
+            <h2>상담관리</h2>
+          </div>
+          <div id="counselListView">
+            <div class="card cm-card">
+              <div class="cm-card__body">
+                <div id="counselStudentPickHost" class="cm-student-individual-grid" role="list" aria-label="상담 대상 학생"></div>
+                <p class="cm-empty-hint" id="counselStudentEmpty" hidden>등록된 학생이 없습니다. 학생 일괄 관리에서 명단을 등록하세요.</p>
+              </div>
+            </div>
+          </div>
+          <div id="counselDetailView" hidden>
+            <div id="counselDetailHost" class="cm-student-individual-detail-host"></div>
+          </div>
+        </section>
+
+        <section class="tab-panel" data-tab-panel="portfolio" id="panel-portfolio" hidden>
+          <div class="panel-head">
+            <h2>포트폴리오 생성</h2>
+          </div>
+          <div class="cm-pf-stack">
+            <div class="card cm-card">
+              <div class="cm-card__head cm-card__head--block">
+                <h3 class="cm-card__title">개별관리 입력 현황</h3>
+              </div>
+              <div class="cm-card__body">
+                <p class="cm-pf-status-lead">
+                  학생 개별 관리의 봉사활동·자율활동·진로활동·학생 총평 탭에서 <strong>입력 마감</strong>한 항목만큼 반영됩니다(각 1/4). 해당 구역을 수정·저장·삭제하면 마감이 자동으로 해제됩니다.
+                </p>
+                <label class="cm-check cm-pf-status-filter">
+                  <input type="checkbox" id="pfStatusFilterIncomplete" />
+                  <span>미완료만 보기</span>
+                </label>
+                <div id="pfInputStatusHost" class="cm-pf-input-status-grid" role="list"></div>
+              </div>
+            </div>
+            <div class="card cm-card">
+              <div class="cm-card__head cm-card__head--block cm-card__head--pf-prompt">
+                <h3 class="cm-card__title">포트폴리오 생성</h3>
+                <button type="button" class="btn-secondary" id="btnPortfolioAiPromptView">프롬프트 보기</button>
+              </div>
+              <div class="cm-card__body cm-pf-card-body">
+                <div class="cm-pf-grid">
+                  <div class="cm-pf-zone">
+                    <h3 class="cm-pf-zone-title">학생 선택</h3>
+                    <div id="pfStudentListHost" class="cm-pf-student-list" role="group" aria-label="포트폴리오 대상 학생">
+                      <label class="cm-check cm-pf-select-all">
+                        <input type="checkbox" id="pfSelectAllCb" />
+                        <span>전체선택</span>
+                      </label>
+                      <div id="pfStudentRowsHost" class="cm-pf-student-rows"></div>
+                    </div>
+                  </div>
+                  <div class="cm-pf-zone">
+                    <h3 class="cm-pf-zone-title">생성 범위 선택</h3>
+                    <fieldset class="cm-pf-fieldset cm-pf-fieldset--checks" aria-label="포함할 영역">
+                      <label class="cm-check"><input type="checkbox" id="pfIncAutonomous" checked /> 자율활동</label>
+                      <label class="cm-check"><input type="checkbox" id="pfIncCareer" checked /> 진로활동</label>
+                      <label class="cm-check"><input type="checkbox" id="pfIncCounsel" checked /> 상담 기록</label>
+                      <label class="cm-check"><input type="checkbox" id="pfIncVol" checked /> 봉사활동</label>
+                      <label class="cm-check"><input type="checkbox" id="pfIncEval" checked /> 학생 총평</label>
+                    </fieldset>
+                  </div>
+                </div>
+                <div class="cm-toolbar cm-toolbar--portfolio">
+                  <button type="button" class="primary-btn cm-pf-generate-btn" id="btnPortfolioPdf">
+                    <span class="cm-pf-gen-fill" aria-hidden="true"></span>
+                    <span class="cm-pf-gen-label">포트폴리오 생성하기</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal-root" id="rosterEventCatalogViewModal" hidden>
+      <div class="modal-backdrop" data-close-modal="ecview"></div>
+      <div class="modal-content card modal-content--wide" role="dialog" aria-modal="true" aria-labelledby="rosterEventCatalogViewTitle">
+        <button type="button" class="modal-close" id="closeRosterEventCatalogViewModal" aria-label="닫기">✕</button>
+        <h3 class="cm-card__title" id="rosterEventCatalogViewTitle">등록된 행사 목록</h3>
+        <p class="cm-modal-lead" id="rosterEventCatalogViewLead"></p>
+        <div id="rosterEventCatalogViewBody" class="cm-catalog-view-body" role="region"></div>
+        <div class="cm-modal-actions">
+          <button type="button" class="primary-btn" id="closeRosterEventCatalogViewBtn">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 학생 추가 -->
+    <div class="modal-root" id="addStudentModal" hidden>
+      <div class="modal-backdrop" data-close-modal="add"></div>
+      <div class="modal-content card modal-content--wide" role="dialog" aria-modal="true" aria-labelledby="addStudentModalTitle">
+        <button type="button" class="modal-close" id="closeAddStudentModal" aria-label="닫기">✕</button>
+        <h3 class="cm-card__title" id="addStudentModalTitle">학생 추가</h3>
+        <p class="cm-modal-lead">번호·이름·연락처 등을 입력합니다. 동아리·선택과목 등은 학생 일괄 관리에서 입력할 수 있습니다.</p>
+        <form class="cm-modal-form" id="rosterForm" autocomplete="off">
+          <div class="cm-form-grid-2">
+            <label class="school-filter-field">
+              <span class="school-filter-label">번호</span>
+              <input class="school-filter-select cm-input-text" name="number" type="text" maxlength="12" id="modalStudentNumber" />
+            </label>
+            <label class="school-filter-field">
+              <span class="school-filter-label">이름 <span class="req">*</span></span>
+              <input class="school-filter-select cm-input-text" name="name" type="text" required maxlength="40" id="modalStudentName" />
+            </label>
+            <label class="school-filter-field">
+              <span class="school-filter-label">성별</span>
+              <select class="school-filter-select" name="gender" id="modalGender">
+                <option value="">선택 안 함</option>
+                <option value="M">남</option>
+                <option value="F">여</option>
+                <option value="O">기타</option>
+              </select>
+            </label>
+            <label class="school-filter-field">
+              <span class="school-filter-label">학생 연락처</span>
+              <input class="school-filter-select cm-input-text" name="studentPhone" type="tel" maxlength="20" id="modalStPhone" />
+            </label>
+            <label class="school-filter-field">
+              <span class="school-filter-label">학부모 연락처</span>
+              <input class="school-filter-select cm-input-text" name="guardianPhone" type="tel" maxlength="20" id="modalGpPhone" />
+            </label>
+            <label class="school-filter-field">
+              <span class="school-filter-label">진로희망</span>
+              <input class="school-filter-select cm-input-text" name="careerInterest" type="text" maxlength="80" id="modalCareer" />
+            </label>
+            <label class="school-filter-field cm-span-2">
+              <span class="school-filter-label">1인 1역</span>
+              <input class="school-filter-select cm-input-text" name="oneRole" type="text" maxlength="120" id="modalOneRole" />
+            </label>
+          </div>
+          <div class="cm-modal-actions">
+            <button type="button" class="btn-secondary" id="cancelAddStudentModal">취소</button>
+            <button type="submit" class="primary-btn">저장</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 학생 개별: 자율·진로 활동 입력 -->
+    <div class="modal-root" id="studentActivityInputModal" hidden>
+      <div class="modal-backdrop" data-close-modal="siact"></div>
+      <div class="modal-content card modal-content--wide cm-si-act-modal" role="dialog" aria-modal="true" aria-labelledby="siActModalTitle">
+        <button type="button" class="modal-close" id="closeStudentActivityModal" aria-label="닫기">✕</button>
+        <h3 class="cm-card__title" id="siActModalTitle">활동 입력</h3>
+        <p class="cm-si-act-modal-student" id="siActModalStudentLine"></p>
+        <hr class="cm-modal-divider" aria-hidden="true" />
+        <div class="cm-si-act-modal-pe">
+          <div class="cm-si-act-modal-pe-title">참여행사</div>
+          <div id="siActPeHost" class="cm-si-pe-body cm-si-act-modal-pe-host"></div>
+        </div>
+        <hr class="cm-modal-divider" aria-hidden="true" />
+        <input type="hidden" id="siActStudentId" value="" />
+        <input type="hidden" id="siActStateKey" value="" />
+        <input type="hidden" id="siActEntryId" value="" />
+        <div class="cm-modal-form">
+          <label class="school-filter-field">
+            <span class="school-filter-label">활동명</span>
+            <input
+              type="text"
+              id="siActName"
+              class="school-filter-select cm-input-text cm-roster-ev-combo"
+              list="siActParticipationDatalist"
+              maxlength="200"
+              autocomplete="off"
+              aria-label="활동명"
+            />
+          </label>
+          <label class="school-filter-field">
+            <span class="school-filter-label">활동 내용</span>
+            <textarea class="school-filter-select cm-input-text" id="siActContent" rows="5" maxlength="8000"></textarea>
+          </label>
+          <label class="school-filter-field">
+            <span class="school-filter-label">학생 소감</span>
+            <textarea class="school-filter-select cm-input-text" id="siActStRef" rows="4" maxlength="8000"></textarea>
+          </label>
+          <label class="school-filter-field">
+            <span class="school-filter-label">교사 관찰 내용</span>
+            <textarea class="school-filter-select cm-input-text" id="siActTeObs" rows="4" maxlength="8000"></textarea>
+          </label>
+          <div class="cm-modal-actions">
+            <button type="button" class="btn-secondary" id="cancelStudentActivityModal">취소</button>
+            <button type="button" class="primary-btn" id="btnSiActSave">저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 학생 상세 -->
+    <div class="modal-root" id="studentDetailModal" hidden>
+      <div class="modal-backdrop" data-close-modal="detail"></div>
+      <div class="modal-content card modal-content--wide" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle">
+        <button type="button" class="modal-close" id="closeDetailModal" aria-label="닫기">✕</button>
+        <h3 class="cm-card__title" id="detailModalTitle">학생 상세</h3>
+        <form id="detailStudentForm" class="cm-modal-form">
+          <input type="hidden" id="detailStudentId" />
+          <div class="cm-form-grid-2">
+            <label class="school-filter-field"><span class="school-filter-label">이름</span><input class="school-filter-select cm-input-text" id="d_name" required maxlength="40" /></label>
+            <label class="school-filter-field"><span class="school-filter-label">번호</span><input class="school-filter-select cm-input-text" id="d_number" maxlength="12" /></label>
+            <label class="school-filter-field"><span class="school-filter-label">성별</span>
+              <select class="school-filter-select" id="d_gender"><option value="">—</option><option value="M">남</option><option value="F">여</option><option value="O">기타</option></select>
+            </label>
+            <label class="school-filter-field"><span class="school-filter-label">학생 연락처</span><input class="school-filter-select cm-input-text" id="d_stPhone" maxlength="20" /></label>
+            <label class="school-filter-field"><span class="school-filter-label">학부모 연락처</span><input class="school-filter-select cm-input-text" id="d_gpPhone" maxlength="20" /></label>
+            <label class="school-filter-field"><span class="school-filter-label">진로희망</span><input class="school-filter-select cm-input-text" id="d_career" maxlength="80" /></label>
+            <label class="school-filter-field"><span class="school-filter-label">동아리</span><input class="school-filter-select cm-input-text" id="d_club" maxlength="60" /></label>
+            <label class="school-filter-field cm-span-2"><span class="school-filter-label">1인 1역</span><input class="school-filter-select cm-input-text" id="d_oneRole" maxlength="120" /></label>
+            <div class="school-filter-field cm-span-2 cm-elective-block">
+              <span class="school-filter-label">선택과목 (학기별 3과목)</span>
+              <div class="cm-elective-slot-grid cm-elective-slot-grid--s1" role="group" aria-label="1학기 선택과목">
+                <span class="cm-elective-sem-label">1학기</span>
+                <input class="school-filter-select cm-input-text" type="text" maxlength="120" id="d_elective_s1_0" autocomplete="off" placeholder="과목 1" />
+                <input class="school-filter-select cm-input-text" type="text" maxlength="120" id="d_elective_s1_1" autocomplete="off" placeholder="과목 2" />
+                <input class="school-filter-select cm-input-text" type="text" maxlength="120" id="d_elective_s1_2" autocomplete="off" placeholder="과목 3" />
+              </div>
+              <div class="cm-elective-slot-grid cm-elective-slot-grid--s2" role="group" aria-label="2학기 선택과목">
+                <span class="cm-elective-sem-label">2학기</span>
+                <input class="school-filter-select cm-input-text" type="text" maxlength="120" id="d_elective_s2_0" autocomplete="off" placeholder="과목 1" />
+                <input class="school-filter-select cm-input-text" type="text" maxlength="120" id="d_elective_s2_1" autocomplete="off" placeholder="과목 2" />
+                <input class="school-filter-select cm-input-text" type="text" maxlength="120" id="d_elective_s2_2" autocomplete="off" placeholder="과목 3" />
+              </div>
+            </div>
+            <label class="school-filter-field cm-span-2"><span class="school-filter-label">특이사항</span><input class="school-filter-select cm-input-text" id="d_special" maxlength="200" /></label>
+          </div>
+          <div class="cm-modal-actions cm-modal-actions--split">
+            <button type="button" class="btn-danger" id="detailDeleteStudent">학생 삭제</button>
+            <div class="cm-modal-actions-right">
+              <button type="button" class="btn-secondary" id="cancelDetailModal">닫기</button>
+              <button type="submit" class="primary-btn">변경 저장</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 학생 시간표 (NEIS·메모) -->
+    <div class="modal-root" id="studentCurriculumModal" hidden>
+      <div class="modal-backdrop" data-close-modal="curr"></div>
+      <div class="modal-content card modal-content--wide" role="dialog" aria-modal="true" aria-labelledby="studentCurriculumModalTitle">
+        <button type="button" class="modal-close" id="closeStudentCurriculumModal" aria-label="닫기">✕</button>
+        <h3 class="cm-card__title" id="studentCurriculumModalTitle">개별 시간표</h3>
+        <p class="cm-modal-lead" id="studentCurriculumModalLead"></p>
+        <div id="studentCurriculumModalBody" class="cm-curriculum-modal-body"></div>
+        <input type="hidden" id="studentCurriculumStudentId" value="" />
+        <div class="cm-modal-actions">
+          <button type="button" class="primary-btn" id="closeStudentCurriculumBtn">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 상담 수정 -->
+    <div class="modal-root" id="counselEditModal" hidden>
+      <div class="modal-backdrop" data-close-modal="cedit"></div>
+      <div class="modal-content card modal-content--wide" role="dialog" aria-modal="true">
+        <button type="button" class="modal-close" id="closeCounselEditModal" aria-label="닫기">✕</button>
+        <h3 class="cm-card__title">상담 수정</h3>
+        <form id="counselEditForm" class="cm-modal-form">
+          <input type="hidden" id="ceditId" />
+          <label class="school-filter-field"><span class="school-filter-label">상담일</span><input class="school-filter-select cm-input-text" type="date" id="ceditDate" /></label>
+          <label class="school-filter-field"><span class="school-filter-label">주제</span><input class="school-filter-select cm-input-text" type="text" id="ceditTopics" maxlength="200" /></label>
+          <label class="school-filter-field"><span class="school-filter-label">내용</span><textarea id="ceditBody" rows="6" required></textarea></label>
+          <div class="cm-modal-actions">
+            <button type="button" class="btn-secondary" id="cancelCounselEdit">취소</button>
+            <button type="submit" class="primary-btn">저장</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 전체 삭제 확인 -->
+    <div class="modal-root" id="portfolioAiPromptModal" hidden>
+      <div class="modal-backdrop" data-close-modal="pfprompt"></div>
+      <div
+        class="modal-content card modal-content--wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="portfolioAiPromptModalTitle"
+      >
+        <button type="button" class="modal-close" id="closePortfolioAiPromptModal" aria-label="닫기">✕</button>
+        <h3 class="cm-card__title" id="portfolioAiPromptModalTitle">AI 생활기록부 생성 프롬프트</h3>
+        <p class="cm-modal-lead">
+          생성된 포트폴리오 PDF를 활용하여, 생성형 AI에게 아래 프롬프트를 주고 생활기록부를 생성하세요.
+        </p>
+        <pre id="portfolioAiPromptText" class="cm-pf-prompt-pre" tabindex="0"></pre>
+        <div class="cm-modal-actions">
+          <button type="button" class="btn-secondary" id="cancelPortfolioAiPromptModal">닫기</button>
+          <button type="button" class="primary-btn" id="btnCopyPortfolioAiPrompt">프롬프트 복사</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-root" id="resetAllModal" hidden>
+      <div class="modal-backdrop" data-close-modal="reset"></div>
+      <div class="modal-content card" role="dialog" aria-modal="true">
+        <button type="button" class="modal-close" id="closeResetModal" aria-label="닫기">✕</button>
+        <h3 class="cm-card__title">전체 삭제</h3>
+        <p class="cm-modal-lead">정말 모든 데이터를 지울까요? 되돌릴 수 없습니다.</p>
+        <div class="cm-modal-actions">
+          <button type="button" class="btn-secondary" id="cancelResetModal">취소</button>
+          <button type="button" class="btn-danger" id="confirmResetModal">전부 삭제</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-root" id="attCalModal" hidden>
+      <div class="modal-backdrop" data-close-modal="attcal"></div>
+      <div class="modal-content card cm-att-cal-modal" role="dialog" aria-modal="true" aria-labelledby="attCalModalTitle">
+        <button type="button" class="modal-close" id="closeAttCalModal" aria-label="닫기">✕</button>
+        <h3 class="cm-card__title" id="attCalModalTitle">출결 캘린더</h3>
+        <p class="cm-modal-lead">조회할 달을 선택한 뒤 조회를 누르면 해당 월의 학생 출결 입력 현황만 달력으로 표시됩니다.</p>
+        <div class="cm-att-cal-toolbar">
+          <label class="cm-att-cal-month-lab">
+            <span class="school-filter-label">조회 월</span>
+            <input type="month" class="school-filter-select cm-input-text" id="attCalMonthInput" />
+          </label>
+          <button type="button" class="primary-btn" id="attCalApplyBtn">조회</button>
+        </div>
+        <div id="attCalHost" class="cm-att-cal-host" role="grid" aria-label="출결 현황 달력"></div>
+        <p class="cm-att-cal-legend">
+          <span class="cm-home-cal-mark cm-home-cal-mark--ok"></span>출결 완료 ·
+          <span class="cm-home-cal-mark cm-home-cal-mark--part"></span>일부 입력 ·
+          <span class="cm-home-cal-mark cm-home-cal-mark--miss"></span>미입력
+        </p>
+      </div>
+    </div>
+
+    <div id="calEvBackdrop" class="cm-cal-ev-backdrop" hidden aria-hidden="true"></div>
+    <div
+      id="calEvPopover"
+      class="cm-cal-ev-popover"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="calEvPopoverTitle"
+      hidden
+    >
+      <div class="cm-cal-ev-popover-arrow" aria-hidden="true"></div>
+      <div class="cm-cal-ev-popover-card">
+        <h4 id="calEvPopoverTitle" class="cm-cal-ev-popover-title">새 일정</h4>
+        <form id="calEvForm" class="cm-cal-ev-form">
+          <input type="hidden" id="calEvId" name="id" value="" />
+          <input type="hidden" id="calEvDate" name="date" value="" />
+          <label class="cm-cal-ev-label">
+            <span class="cm-cal-ev-label-txt">카테고리</span>
+            <input type="hidden" id="calEvCategory" name="category" value="class" />
+            <div id="calEvCategoryPicker" class="cm-cal-ev-cat-picker" role="listbox" aria-label="카테고리"></div>
+          </label>
+          <label class="cm-cal-ev-allday">
+            <input type="checkbox" id="calEvAllDay" name="allDay" />
+            <span>하루 종일</span>
+          </label>
+          <div id="calEvTimeWrap" class="cm-cal-ev-time-row">
+            <label class="cm-cal-ev-label cm-cal-ev-label--inline">
+              <span class="cm-cal-ev-label-txt">시작</span>
+              <input type="time" id="calEvStart" name="start" class="cm-input-text" />
+            </label>
+            <label class="cm-cal-ev-label cm-cal-ev-label--inline">
+              <span class="cm-cal-ev-label-txt">종료</span>
+              <input type="time" id="calEvEnd" name="end" class="cm-input-text" />
+            </label>
+          </div>
+          <label class="cm-cal-ev-label">
+            <span class="cm-cal-ev-label-txt">제목</span>
+            <input type="text" id="calEvTitle" name="title" class="cm-input-text" maxlength="120" required placeholder="일정 제목" />
+          </label>
+          <label class="cm-cal-ev-label">
+            <span class="cm-cal-ev-label-txt">상세</span>
+            <textarea id="calEvDetail" name="detail" class="cm-input-text" rows="3" maxlength="2000" placeholder="메모·장소 등"></textarea>
+          </label>
+          <div class="cm-cal-ev-actions">
+            <button type="button" class="btn-secondary" id="calEvCancel">취소</button>
+            <button type="button" class="btn-danger" id="calEvDelete" hidden>삭제</button>
+            <button type="submit" class="primary-btn" id="calEvSave">저장</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="cmToast" class="cm-toast" role="status" aria-live="polite" hidden></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
